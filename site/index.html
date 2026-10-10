@@ -13,7 +13,7 @@
   --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
   --bg: #F2F2F7; --card: #FFFFFF; --label: #1D1D1F; --label2: #6E6E73; --sep: #D8D8DC;
   --fill: rgba(118,118,128,.12); --thumb: #FFFFFF; --shadow: 0 1px 3px rgba(0,0,0,.12);
-  --accent: #0066CC; --accent-fill: #0071E3; --danger: #C9001A;
+  --accent: #0066CC; --accent-fill: #0071E3; --danger: #C9001A; --warn: #A35200;
   --up: #1F7A35; --down: #C9001A; --cash: #8E8E93;
   --c1: #007AFF; --c2: #FF9500; --c3: #AF52DE; --c4: #30B0C7; --c5: #FF2D55;
   --c6: #FFCC00; --c7: #5856D6; --c8: #A2845E; --c9: #32ADE6; --c10: #00C7BE;
@@ -24,7 +24,7 @@
   :root {
     --bg: #000000; --card: #1C1C1E; --label: #F5F5F7; --label2: #98989D; --sep: #38383A;
     --fill: rgba(118,118,128,.24); --thumb: #636366; --shadow: none;
-    --accent: #409CFF; --accent-fill: #0071E3; --danger: #FF6961;
+    --accent: #409CFF; --accent-fill: #0071E3; --danger: #FF6961; --warn: #FFB340;
     --up: #30D158; --down: #FF6961; --cash: #8E8E93;
     --c1: #0A84FF; --c2: #FF9F0A; --c3: #BF5AF2; --c4: #40C8E0; --c5: #FF375F;
     --c6: #FFD60A; --c7: #5E5CE6; --c8: #AC8E68; --c9: #64D2FF; --c10: #63E6E2;
@@ -35,7 +35,7 @@
 [hidden] { display: none !important; }
 html { -webkit-text-size-adjust: 100%; }
 body { margin: 0; background: var(--bg); color: var(--label); font: 17px/1.35 var(--font); -webkit-font-smoothing: antialiased; }
-button, input, select { font: inherit; color: inherit; }
+button, input, select, textarea { font: inherit; color: inherit; }
 a { color: var(--accent); }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
 .num { font-variant-numeric: tabular-nums; }
@@ -112,7 +112,10 @@ main { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); grid-tem
 .legend .val { color: var(--label2); text-align: right; min-width: 6.5em; }
 
 #holdings { grid-area: holdings; }
-.hold li { padding: 12px 0; }
+.hold li.static, .hold-btn { padding: 12px 0; }
+.hold-btn { display: block; width: 100%; text-align: left; background: none; border: 0; cursor: pointer; border-radius: 8px; }
+@media (hover: hover) { .hold-btn:hover .tk { color: var(--accent); } }
+.chev { color: var(--label2); margin-left: 6px; }
 .row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
 .row > :first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .row > :last-child { flex-shrink: 0; text-align: right; }
@@ -146,7 +149,8 @@ dialog::backdrop { background: rgba(0,0,0,.4); }
 .fields .full { grid-column: 1 / -1; }
 .field { display: grid; gap: 4px; font-size: 13px; color: var(--label2); }
 .field input, .field select { color: var(--label); }
-input:not([type=radio]), select { width: 100%; font-size: 17px; background: var(--fill); border: 0; border-radius: 10px; padding: 10px 12px; min-height: 44px; }
+textarea { resize: vertical; line-height: 1.4; display: block; overflow: hidden; }
+input:not([type=radio]), select, textarea { width: 100%; font-size: 17px; background: var(--fill); border: 0; border-radius: 10px; padding: 10px 12px; min-height: 44px; }
 input:user-invalid { box-shadow: inset 0 0 0 1.5px var(--danger); }
 .hint { font-size: 13px; color: var(--label2); margin: 6px 0 0; }
 .err { color: var(--danger); font-size: 15px; margin: 8px 0 0; }
@@ -161,6 +165,15 @@ input:user-invalid { box-shadow: inset 0 0 0 1.5px var(--danger); }
 .inline > .field { flex: 1; }
 .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
 #signin .sheet-body ol { padding-left: 1.2em; }
+#research .sheet-body h3 { font-size: 17px; margin: 20px 0 8px; }
+.review { border-top: .5px solid var(--sep); padding: 12px 0; }
+.review:first-child { border-top: 0; padding-top: 0; }
+.review-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; font-size: 15px; }
+.chip { font-size: 13px; font-weight: 600; padding: 2px 10px; border-radius: 999px; background: var(--fill); }
+.chip.strengthened { color: var(--accent); } .chip.weakened { color: var(--warn); } .chip.broken { color: var(--danger); }
+.prewrap { white-space: pre-wrap; font-size: 15px; margin: 8px 0; }
+.links { list-style: none; padding: 0; margin: 4px 0 0; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; }
+details summary { cursor: pointer; color: var(--label2); font-size: 15px; margin-top: 20px; min-height: 44px; display: flex; align-items: center; }
 #signin .sheet-body li { margin: 6px 0; }
 </style>
 </head>
@@ -293,6 +306,40 @@ input:user-invalid { box-shadow: inset 0 0 0 1.5px var(--danger); }
       <p class="err" id="signin-err" role="alert"></p>
     </div>
   </form>
+</dialog>
+
+<dialog id="research" class="sheet" aria-labelledby="rs-title">
+  <div class="sheet-bar">
+    <button type="button" class="text-btn" data-close>Close</button>
+    <h2 id="rs-title"></h2>
+    <button type="button" class="prominent" id="rs-save">Save</button>
+  </div>
+  <div class="sheet-body">
+    <p class="hint" id="rs-facts"></p>
+    <p class="hint" id="rs-pending"></p>
+    <p class="err" id="rs-err" role="alert"></p>
+    <h3>Your plan</h3>
+    <div class="fields">
+      <label class="field">Target price
+        <input id="rs-target" type="number" inputmode="decimal" min="0" step="any" aria-describedby="rs-upside">
+      </label>
+      <p class="hint" id="rs-upside" style="align-self:end;margin:0 0 12px"></p>
+      <label class="field full">When you plan to sell
+        <textarea id="rs-sellPlan" rows="2" placeholder="The price, date or event that would make you sell"></textarea>
+      </label>
+    </div>
+    <h3 id="h-thesis">Thesis</h3>
+    <textarea id="rs-thesis" aria-labelledby="h-thesis"></textarea>
+    <h3 id="h-bull">Bull case</h3>
+    <textarea id="rs-bull" aria-labelledby="h-bull"></textarea>
+    <h3 id="h-bear">Bear case</h3>
+    <textarea id="rs-bear" aria-labelledby="h-bear"></textarea>
+    <h3 id="h-watch">What to watch each quarter</h3>
+    <textarea id="rs-watch" aria-labelledby="h-watch"></textarea>
+    <h3>Earnings reviews</h3>
+    <div id="rs-reviews"></div>
+    <details id="rs-sources-wrap"><summary>Sources</summary><div id="rs-sources"></div></details>
+  </div>
 </dialog>
 
 <script type="module" src="app.js"></script>

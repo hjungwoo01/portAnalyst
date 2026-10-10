@@ -15,7 +15,7 @@ const today = () => new Date().toLocaleDateString('sv'); // YYYY-MM-DD in local 
 // Korea, Japan and China mark gains in red, like Apple Stocks does in those regions.
 if (/^(ko|ja|zh)\b/.test(navigator.language)) document.documentElement.dataset.updown = 'east';
 
-let holdings, prices, sha, draft, a, loadError;
+let holdings, prices, sha, draft, a, loadError, notes = {}, notesSha, current;
 const view = { range: store.get('range') || '1Y', by: store.get('by') || 'sector' };
 
 // ---------- formatting ----------
@@ -35,10 +35,26 @@ const gh = (file, { method = 'GET', body, raw, tok = token() } = {}) => fetch(`$
   body: body && JSON.stringify(body),
 });
 
+// Saves a JSON file to the data repo and returns its new sha, or throws a message for the person.
+async function put(file, data, fileSha, message) {
+  let r;
+  try {
+    r = await gh(file, { method: 'PUT', body: { message, content: b64(JSON.stringify(data, null, 2) + '\n'), sha: fileSha } });
+  } catch {
+    throw new Error('Couldn’t reach GitHub. Check your connection and try again.');
+  }
+  if (r.ok) return (await r.json()).content.sha;
+  throw new Error(
+    r.status === 409 ? 'This changed on GitHub since the page loaded, from another device or a Claude update. Reload the page and make your edit again.' :
+    r.status === 401 ? 'GitHub no longer accepts your token. Sign out, then sign in with a new one.' :
+    r.status === 403 || r.status === 404 ? 'This token can view but not save. Give it Contents read and write access to portAnalyst-data.' :
+    `GitHub returned an error (${r.status}). Try again in a moment.`);
+}
+
 // Returns an error message for the sign-in screen, or nothing on success.
 async function load(tok = token()) {
   try {
-    const [h, p] = await Promise.all([gh('holdings.json', { tok }), gh('prices.json', { raw: true, tok })]);
+    const [h, p, n] = await Promise.all([gh('holdings.json', { tok }), gh('prices.json', { raw: true, tok }), gh('theses.json', { tok })]);
     if (h.status === 401) return 'GitHub doesn’t recognize that token. It may have expired.';
     if (h.status === 404) return 'That token can’t read portAnalyst-data. Give it access to that repository.';
     if (!h.ok) return `GitHub returned an error (${h.status}). Try again in a moment.`;
@@ -48,6 +64,7 @@ async function load(tok = token()) {
     holdings.cash ??= {};
     holdings.countAsCash ??= [];
     prices = p.ok ? await p.json() : null;
+    if (n.ok) { const k = await n.json(); notesSha = k.sha; notes = JSON.parse(unb64(k.content)); }
   } catch {
     return 'Couldn’t reach GitHub. Check your connection and try again.';
   }
@@ -185,12 +202,15 @@ function renderAlloc() {
 function renderHoldings() {
   const w = (v) => pct(a.total ? v / a.total : 0, 1, false);
   const shares = (s) => `${fmt(s, { maximumFractionDigits: 4 })} ${Math.abs(s) === 1 ? 'share' : 'shares'}`;
-  const row = (p) => `<li>
-    <div class="row"><span><span class="tk">${esc(p.ticker)}</span> <span class="muted">${esc(p.name)}</span></span><span class="num">${money(p.value)}</span></div>
-    <div class="row"><span class="num">${shares(p.shares)} · ${money(p.price, p.currency)} · ${w(p.value)}</span><span class="num ${tone(p.gain)}">${money(p.gain, a.base, true)} (${pct(p.cost ? p.gain / p.cost : 0)})</span></div>
-  </li>`;
+  const row = (p) => {
+    const t = notes[p.ticker]?.target, target = t ? ` · target ${money(t, p.currency)} (${pct(t / p.price - 1)})` : '';
+    return `<li><button type="button" class="hold-btn" data-notes="${esc(p.ticker)}">
+    <div class="row"><span><span class="tk">${esc(p.ticker)}</span> <span class="muted">${esc(p.name)}</span></span><span class="num">${money(p.value)}<span class="chev" aria-hidden="true">›</span></span></div>
+    <div class="row"><span class="num">${shares(p.shares)} · ${money(p.price, p.currency)} · ${w(p.value)}${target}</span><span class="num ${tone(p.gain)}">${money(p.gain, a.base, true)} (${pct(p.cost ? p.gain / p.cost : 0)})</span></div>
+  </button></li>`;
+  };
   const invested = a.positions.filter((p) => !p.asCash);
-  const cash = a.cash.map((c) => `<li>
+  const cash = a.cash.map((c) => `<li class="static">
     <div class="row"><span class="tk">${esc(c.currency)}</span><span class="num">${money(c.value)}</span></div>
     <div class="row"><span class="num">${c.currency === a.base ? 'Cash' : money(c.amount, c.currency)} · ${w(c.value)}</span><span></span></div>
   </li>`).join('') + a.positions.filter((p) => p.asCash).map(row).join('');
@@ -208,6 +228,78 @@ function renderNotes() {
   if (!$('#status').dataset.sticky) $('#status').textContent = notes.join(' ');
   $('#updated').textContent = `Prices from Yahoo Finance, updated ${new Date(prices.updated).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}.`;
 }
+
+// ---------- research notes ----------
+const TEXT = ['thesis', 'bull', 'bear', 'watch', 'sellPlan'];
+const STATUS = { strengthened: 'Strengthened', intact: 'Intact', weakened: 'Weakened', broken: 'Broken' };
+const fit = (el) => { el.style.height = 'auto'; el.style.height = `${el.scrollHeight + 2}px`; };
+const notesForm = () => ({ ...Object.fromEntries(TEXT.map((k) => [k, $(`#rs-${k}`).value.trim()])), target: $('#rs-target').value.trim() });
+
+function showUpside() {
+  const p = a.positions.find((x) => x.ticker === current), t = +$('#rs-target').value;
+  $('#rs-upside').textContent = p && t > 0 ? `${pct(t / p.price - 1)} from today’s ${money(p.price, p.currency)}` : '';
+}
+
+function openNotes(ticker) {
+  current = ticker;
+  const n = notes[ticker] || {}, p = a.positions.find((x) => x.ticker === ticker), t = prices.tickers[ticker] || {};
+  $('#rs-title').textContent = ticker;
+  $('#rs-facts').textContent = [
+    p?.name,
+    t.analystTarget && p && `Analysts’ average target ${money(t.analystTarget, p.currency)}${t.analysts ? ` from ${t.analysts} analysts` : ''}`,
+    t.nextEarnings && `Next earnings ${day(t.nextEarnings, true)}`,
+  ].filter(Boolean).join(' · ');
+  $('#rs-pending').textContent = notes[ticker] ? '' : 'Claude writes notes for a new holding a few minutes after you save the trade. You can also write your own here.';
+  for (const k of TEXT) $(`#rs-${k}`).value = n[k] ?? '';
+  $('#rs-target').value = n.target ?? '';
+  $('#rs-err').textContent = '';
+  showUpside();
+
+  const reviews = n.reviews || [];
+  $('#rs-reviews').innerHTML = reviews.map((r) => `<article class="review">
+      <div class="review-head"><span class="chip ${esc(r.status)}">${esc(STATUS[r.status] || r.status)}</span><strong>${esc(r.quarter || '')}</strong><span class="muted">${esc(r.date)}</span></div>
+      <p class="prewrap">${esc(r.summary)}</p>
+      ${links(r.sources)}
+    </article>`).join('') ||
+    `<p class="hint">Claude reviews this holding the day after its next earnings report${t.nextEarnings ? `, ${day(t.nextEarnings, true)}` : ''}.</p>`;
+  $('#rs-sources').innerHTML = links(n.sources);
+  $('#rs-sources-wrap').hidden = !n.sources?.length;
+
+  $('#research').showModal();
+  document.querySelectorAll('#research textarea').forEach(fit);
+}
+
+const links = (urls = []) => urls.filter((u) => /^https:\/\//.test(u)).length
+  ? `<ul class="links">${urls.filter((u) => /^https:\/\//.test(u)).map((u) => `<li><a href="${esc(u)}" target="_blank" rel="noopener noreferrer">${esc(new URL(u).hostname.replace(/^www\./, ''))}</a></li>`).join('')}</ul>`
+  : '';
+
+const notesDirty = () => {
+  const n = notes[current] || {}, f = notesForm();
+  return TEXT.some((k) => f[k] !== (n[k] ?? '')) || f.target !== String(n.target ?? '');
+};
+
+$('#hold-body').addEventListener('click', (e) => { const b = e.target.closest('[data-notes]'); if (b) openNotes(b.dataset.notes); });
+$('#research').addEventListener('input', (e) => { if (e.target.tagName === 'TEXTAREA') fit(e.target); if (e.target.id === 'rs-target') showUpside(); });
+$('#research').addEventListener('cancel', (e) => { e.preventDefault(); if (!notesDirty() || confirm('Discard your unsaved changes?')) $('#research').close(); });
+
+$('#rs-save').addEventListener('click', async () => {
+  const err = $('#rs-err'), f = notesForm(), btn = $('#rs-save');
+  if (f.target && !(+f.target > 0)) { err.textContent = 'Enter a target price above zero, or leave it empty.'; return; }
+  if (!notesDirty()) return $('#research').close();
+  const next = structuredClone(notes);
+  Object.assign((next[current] ??= { reviews: [], sources: [] }), f, { target: f.target ? +f.target : null });
+  btn.disabled = true; btn.textContent = 'Saving…'; err.textContent = '';
+  try {
+    notesSha = await put('theses.json', next, notesSha, `Update notes for ${current}`);
+    notes = next;
+    $('#research').close();
+    renderHoldings();
+  } catch (e) {
+    err.textContent = e.message;
+  } finally {
+    btn.disabled = false; btn.textContent = 'Save';
+  }
+});
 
 // ---------- editing ----------
 function openEditor() {
@@ -277,7 +369,12 @@ function closeEditor() {
   if (!dirty() || confirm('Discard your unsaved changes?')) $('#editor').close();
 }
 $('#editor').addEventListener('cancel', (e) => { e.preventDefault(); closeEditor(); });
-document.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', () => (b.closest('dialog').id === 'editor' ? closeEditor() : b.closest('dialog').close())));
+document.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', () => {
+  const d = b.closest('dialog');
+  if (d.id === 'editor') closeEditor();
+  else if (d.id === 'research') d.dispatchEvent(new Event('cancel'));
+  else d.close();
+}));
 
 $('#save').addEventListener('click', async () => {
   const err = $('#save-err'), bench = $('#set-bench'), base = $('#set-base');
@@ -289,25 +386,14 @@ $('#save').addEventListener('click', async () => {
   const btn = $('#save');
   btn.disabled = true; btn.textContent = 'Saving…'; err.textContent = '';
   try {
-    const r = await gh('holdings.json', { method: 'PUT', body: { message: 'Update holdings', content: b64(JSON.stringify(draft, null, 2) + '\n'), sha } });
-    if (r.ok) {
-      sha = (await r.json()).content.sha;
-      holdings = draft;
-      $('#editor').close();
-      $('#status').dataset.sticky = 1;
-      $('#status').textContent = 'Saved. Prices for any new tickers arrive in about a minute; reload to see them.';
-      render();
-    } else if (r.status === 409) {
-      err.textContent = 'Your holdings changed on GitHub since this page loaded. Reload the page and make your edit again.';
-    } else if (r.status === 401) {
-      err.textContent = 'GitHub no longer accepts your token. Sign out, then sign in with a new one.';
-    } else if (r.status === 403 || r.status === 404) {
-      err.textContent = 'This token can view but not save. Give it Contents read and write access to portAnalyst-data.';
-    } else {
-      err.textContent = `GitHub returned an error (${r.status}). Try again in a moment.`;
-    }
-  } catch {
-    err.textContent = 'Couldn’t reach GitHub. Check your connection and try again.';
+    sha = await put('holdings.json', draft, sha, 'Update holdings');
+    holdings = draft;
+    $('#editor').close();
+    $('#status').dataset.sticky = 1;
+    $('#status').textContent = 'Saved. Prices for any new tickers arrive in about a minute, and Claude’s notes on new holdings a few minutes later. Reload to see them.';
+    render();
+  } catch (e) {
+    err.textContent = e.message;
   } finally {
     btn.disabled = false; btn.textContent = 'Save';
   }

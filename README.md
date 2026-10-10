@@ -5,6 +5,7 @@ A personal portfolio tracker on GitHub Pages: sector and cash weightings, and a 
 This repository is only the app; it holds no portfolio data. Holdings and prices live in the private repository `hjungwoo01/portAnalyst-data`, and the page reads them through the GitHub API with a fine-grained token you paste in once per device. Without a token that can read that repository, the site shows nothing.
 
 - `site/`: the page (`index.html`, `app.js`, `calc.js`).
+- Tap a holding to open its research notes: thesis, bull and bear cases, your target price and sell plan, and Claude's earnings reviews. The notes live in `theses.json` in the private repository.
 - `calc.test.mjs`: tests for the portfolio math. Run with `node --test`.
 - `.github/workflows/deploy.yml`: tests and deploys `site/` on every push.
 
