@@ -46,6 +46,7 @@ async function load(tok = token()) {
     sha = j.sha;
     holdings = JSON.parse(unb64(j.content));
     holdings.cash ??= {};
+    holdings.countAsCash ??= [];
     prices = p.ok ? await p.json() : null;
   } catch {
     return 'Couldn’t reach GitHub. Check your connection and try again.';
@@ -106,7 +107,7 @@ function renderBench() {
 
   $('#range').innerHTML = '<legend class="vh">Period</legend>' + Object.keys(RANGES).map((r) =>
     `<input type="radio" name="range" id="r-${r}" value="${r}" ${r === view.range ? 'checked' : ''}><label for="r-${r}">${r}</label>`).join('');
-  $('#bench-foot').textContent = `Time-weighted return of your holdings, so deposits and withdrawals don’t count as performance. Cash is excluded. Both are price returns without dividends, in ${a.base}.`;
+  $('#bench-foot').textContent = `Time-weighted return of your holdings, so deposits and withdrawals don’t count as performance. Cash, including holdings you count as cash, is excluded. Both are price returns without dividends, in ${a.base}.`;
 
   drawChart(w, (i) => { sub.innerHTML = i == null ? `${summary(w.you.length - 1)} · ${since}` : `${day(w.dates[i], true)} · ${summary(i)}`; });
 }
@@ -184,16 +185,17 @@ function renderAlloc() {
 function renderHoldings() {
   const w = (v) => pct(a.total ? v / a.total : 0, 1, false);
   const shares = (s) => `${fmt(s, { maximumFractionDigits: 4 })} ${Math.abs(s) === 1 ? 'share' : 'shares'}`;
-  const pos = a.positions.map((p) => `<li>
+  const row = (p) => `<li>
     <div class="row"><span><span class="tk">${esc(p.ticker)}</span> <span class="muted">${esc(p.name)}</span></span><span class="num">${money(p.value)}</span></div>
     <div class="row"><span class="num">${shares(p.shares)} · ${money(p.price, p.currency)} · ${w(p.value)}</span><span class="num ${tone(p.gain)}">${money(p.gain, a.base, true)} (${pct(p.cost ? p.gain / p.cost : 0)})</span></div>
-  </li>`).join('');
+  </li>`;
+  const invested = a.positions.filter((p) => !p.asCash);
   const cash = a.cash.map((c) => `<li>
     <div class="row"><span class="tk">${esc(c.currency)}</span><span class="num">${money(c.value)}</span></div>
     <div class="row"><span class="num">${c.currency === a.base ? 'Cash' : money(c.amount, c.currency)} · ${w(c.value)}</span><span></span></div>
-  </li>`).join('');
-  $('#hold-title').textContent = `Holdings (${a.positions.length})`;
-  $('#hold-body').innerHTML = `<ul class="list hold">${pos}</ul>${cash ? `<p class="group-label">Cash</p><ul class="list hold">${cash}</ul>` : ''}`;
+  </li>`).join('') + a.positions.filter((p) => p.asCash).map(row).join('');
+  $('#hold-title').textContent = `Holdings (${invested.length})`;
+  $('#hold-body').innerHTML = `<ul class="list hold">${invested.map(row).join('')}</ul>${cash ? `<p class="group-label">Cash</p><ul class="list hold">${cash}</ul>` : ''}`;
 }
 
 function renderNotes() {
@@ -212,6 +214,7 @@ function openEditor() {
   draft = structuredClone(holdings);
   $('#set-bench').value = draft.benchmark;
   $('#set-base').value = draft.base;
+  $('#set-ascash').value = draft.countAsCash.join(', ');
   $('#trade-form').date.value = today();
   $('#trade-form').date.max = today();
   $('#save-err').textContent = '';
@@ -264,7 +267,12 @@ $('#editor').addEventListener('input', (e) => {
   if (e.target.dataset.cash) draft.cash[e.target.dataset.cash] = +e.target.value || 0;
 });
 
-const dirty = () => JSON.stringify({ ...draft, benchmark: $('#set-bench').value.trim().toUpperCase(), base: $('#set-base').value.trim().toUpperCase() }) !== JSON.stringify(holdings);
+const settings = () => ({
+  benchmark: $('#set-bench').value.trim().toUpperCase(),
+  base: $('#set-base').value.trim().toUpperCase(),
+  countAsCash: $('#set-ascash').value.split(/[\s,]+/).filter(Boolean).map((t) => t.toUpperCase()),
+});
+const dirty = () => JSON.stringify({ ...draft, ...settings() }) !== JSON.stringify(holdings);
 function closeEditor() {
   if (!dirty() || confirm('Discard your unsaved changes?')) $('#editor').close();
 }
@@ -274,8 +282,8 @@ document.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('cli
 $('#save').addEventListener('click', async () => {
   const err = $('#save-err'), bench = $('#set-bench'), base = $('#set-base');
   if (!bench.checkValidity() || !base.checkValidity()) { err.textContent = 'Enter a benchmark ticker and a three-letter currency code.'; return; }
-  draft.benchmark = bench.value.trim().toUpperCase();
-  draft.base = base.value.trim().toUpperCase();
+  if (!settings().countAsCash.every((t) => /^[A-Z0-9.\-^=]{1,20}$/.test(t))) { err.textContent = 'List the holdings that count as cash as tickers separated by commas, like IB01.L.'; return; }
+  Object.assign(draft, settings());
   if (!dirty()) return $('#editor').close();
 
   const btn = $('#save');

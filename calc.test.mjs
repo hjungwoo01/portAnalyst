@@ -44,6 +44,14 @@ test('time-weighted return ignores money moving in and out', () => {
   near(sold.positions.find((p) => p.ticker === 'A').cost, 105);
 });
 
+test('holdings counted as cash join cash and leave the benchmark comparison', () => {
+  const a = analyze({ ...holdings, countAsCash: ['B'] }, prices);
+  near(a.total, 542); near(a.cashValue, 300);
+  assert.ok(a.positions.find((p) => p.ticker === 'B').asCash);
+  near(a.series.you.at(-1), 242 / 210 - 1); // A alone, B's flows ignored
+  assert.deepEqual(allocation(a, 'holding').map((r) => [r.name, r.value]), [['A', 242], ['Cash', 300]]);
+});
+
 test('allocation spreads sectors and appends cash', () => {
   const rows = allocation(analyze(holdings, prices), 'sector');
   assert.deepEqual(rows.map((r) => [r.name, r.value]),

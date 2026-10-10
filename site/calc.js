@@ -33,6 +33,7 @@ export function analyze(holdings, prices) {
     .map((t) => ({ ...splitAdjust(t, tickers[t.ticker].splits), i: indexOnOrAfter(dates, t.date) }))
     .sort((a, b) => a.i - b.i);
   const amount = (t) => t.shares * t.price * fx(tickers[t.ticker].currency, t.i);
+  const asCash = new Set(holdings.countAsCash || []); // e.g. T-bill ETFs the owner treats as cash
 
   // Positions on an average-cost basis: a sell removes cost pro rata.
   const pos = {};
@@ -47,7 +48,7 @@ export function analyze(holdings, prices) {
     .map((p) => {
       const t = tickers[p.ticker], [prev, price] = t.change, f = fx(t.currency, last);
       const value = p.shares * price * f;
-      return { ...p, name: t.name, currency: t.currency, sectors: t.sectors, price, value,
+      return { ...p, asCash: asCash.has(p.ticker), name: t.name, currency: t.currency, sectors: t.sectors, price, value,
                gain: value - p.cost, day: p.shares * (price - prev) * f };
     })
     .sort((a, b) => b.value - a.value);
@@ -56,16 +57,18 @@ export function analyze(holdings, prices) {
     .filter(([cur]) => fx(cur, last) != null)
     .map(([currency, amt]) => ({ currency, amount: amt, value: amt * fx(currency, last) }));
 
-  // Time-weighted return: buys enter at the start of their day, sells leave at its end,
-  // so cash moving in or out never counts as performance.
-  const s0 = Math.max((txs[0]?.i ?? last) - 1, 0);
+  // Time-weighted return of the invested holdings (cash and cash-like holdings excluded).
+  // Buys enter at the start of their day, sells leave at its end, so money moving in or out
+  // never counts as performance.
+  const inv = txs.filter((t) => !asCash.has(t.ticker));
+  const s0 = Math.max((inv[0]?.i ?? last) - 1, 0);
   const held = {}, you = [], bench = [];
   const b0 = px(holdings.benchmark, s0);
   let prevV = 0, index = 1, k = 0;
   for (let i = s0; i < n; i++) {
     let buys = 0, sells = 0;
-    for (; k < txs.length && txs[k].i <= i; k++) {
-      const t = txs[k];
+    for (; k < inv.length && inv[k].i <= i; k++) {
+      const t = inv[k];
       held[t.ticker] = (held[t.ticker] || 0) + t.shares;
       t.shares > 0 ? (buys += amount(t)) : (sells -= amount(t));
     }
@@ -78,20 +81,23 @@ export function analyze(holdings, prices) {
   }
 
   const sum = (a, k) => a.reduce((s, x) => s + x[k], 0);
-  const invested = sum(positions, 'value'), cashValue = sum(cash, 'value');
+  const invested = sum(positions, 'value'), cashBalance = sum(cash, 'value');
+  const cashValue = cashBalance + sum(positions.filter((p) => p.asCash), 'value');
   return {
-    base, positions, cash, invested, cashValue, total: invested + cashValue,
+    base, positions, cash, invested, cashValue, total: invested + cashBalance,
     cost: sum(positions, 'cost'), day: sum(positions, 'day'),
     series: { dates: dates.slice(s0), you, bench },
     pending: [...pending],
   };
 }
 
-// Value per sector (ETFs spread across their look-through weights) or per holding, plus cash.
+// Value per sector (ETFs spread across their look-through weights) or per holding,
+// plus one Cash row that includes holdings counted as cash.
 export function allocation(a, by) {
   const m = new Map();
   const add = (k, v) => m.set(k, (m.get(k) || 0) + v);
   for (const p of a.positions) {
+    if (p.asCash) continue;
     if (by === 'holding') add(p.ticker, p.value);
     else for (const [s, w] of Object.entries(p.sectors)) add(s, p.value * w);
   }
