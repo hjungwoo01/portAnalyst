@@ -8,4 +8,4 @@ This repository is only the app; it holds no portfolio data. Holdings and prices
 - `calc.test.mjs`: tests for the portfolio math. Run with `node --test`.
 - `.github/workflows/deploy.yml`: tests and deploys `site/` on every push.
 
-Tickers use Yahoo Finance symbols: `AAPL`, `005930.KS` (KOSPI), `035720.KQ` (KOSDAQ), `^KS11` (KOSPI index), `BTC-USD`.
+Tickers use Yahoo Finance symbols: `AAPL`, `IB01.L` (London), `005930.KS` (KOSPI), `035720.KQ` (KOSDAQ), `^KS11` (KOSPI index), `BTC-USD`.

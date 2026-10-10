@@ -201,7 +201,7 @@ function renderNotes() {
   const waiting = a.pending.filter((s) => !missing.includes(s));
   const notes = [];
   if (waiting.length) notes.push(`Waiting for prices for ${waiting.join(', ')}. They arrive about a minute after saving; reload to see them.`);
-  if (missing.length) notes.push(`Yahoo Finance has no prices for ${missing.join(', ')}. Check the ticker; Korean stocks end in .KS or .KQ.`);
+  if (missing.length) notes.push(`Yahoo Finance has no prices for ${missing.join(', ')}. Outside the US, Yahoo adds an exchange suffix: .L for London (IB01.L), .KS or .KQ for Korea.`);
   if (holdings.base !== prices.base) notes.push(`Values switch to ${holdings.base} after the next update.`);
   if (!$('#status').dataset.sticky) $('#status').textContent = notes.join(' ');
   $('#updated').textContent = `Prices from Yahoo Finance, updated ${new Date(prices.updated).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}.`;
