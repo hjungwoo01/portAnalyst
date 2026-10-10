@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://api.github.com; base-uri 'none'; object-src 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src https://api.github.com; base-uri 'none'; object-src 'none'">
 <meta name="color-scheme" content="light dark">
 <title>Portfolio</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230071E3'/%3E%3Cpath d='M6 22l7-7 5 4 8-9' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
@@ -172,7 +172,7 @@ input:user-invalid { box-shadow: inset 0 0 0 1.5px var(--danger); }
   </header>
   <p id="status" role="status"></p>
   <div id="empty" class="card empty" hidden></div>
-  <main id="main">
+  <main id="main" hidden>
     <dl id="summary" class="card"></dl>
 
     <section id="bench" class="card" aria-labelledby="verdict">
@@ -262,7 +262,7 @@ input:user-invalid { box-shadow: inset 0 0 0 1.5px var(--danger); }
         <input id="set-base" required pattern="[A-Za-z]{3}" maxlength="3" autocapitalize="characters" autocomplete="off" placeholder="USD">
       </label>
     </div>
-    <p class="hint">New tickers, currencies and benchmarks get prices on the next update, about two minutes after you save.</p>
+    <p class="hint">New tickers, currencies and benchmarks get prices about a minute after you save.</p>
 
     <div class="actions"><button type="button" class="text-btn danger" id="signout">Sign Out on This Device</button></div>
   </div>
@@ -272,20 +272,20 @@ input:user-invalid { box-shadow: inset 0 0 0 1.5px var(--danger); }
   <form id="signin-form" novalidate>
     <div class="sheet-bar">
       <button type="button" class="text-btn" data-close>Cancel</button>
-      <h2 id="si-title">Sign In to Edit</h2>
+      <h2 id="si-title">Sign In</h2>
       <button type="submit" class="prominent">Sign In</button>
     </div>
     <div class="sheet-body">
-      <p>Holdings are saved to your GitHub repository, so only someone who can write to it can change them.</p>
+      <p>This portfolio is stored in your private GitHub repository, portAnalyst-data, so only a token with access to it can view or change it.</p>
       <ol>
-        <li><a id="token-link" href="https://github.com/settings/personal-access-tokens/new?name=portAnalyst&amp;description=Edit%20portfolio%20holdings&amp;target_name=hjungwoo01&amp;contents=write" target="_blank" rel="noopener">Create a fine-grained token</a> with access to only this repository.</li>
-        <li>Under Repository permissions, set Contents to Read and write.</li>
+        <li><a id="token-link" href="https://github.com/settings/personal-access-tokens/new?name=portAnalyst&amp;description=Edit%20portfolio%20holdings&amp;target_name=hjungwoo01&amp;contents=write" target="_blank" rel="noopener">Create a fine-grained token</a> with access to only portAnalyst-data.</li>
+        <li>Under Repository permissions, set Contents to Read and write. Read-only is enough on a device you only view from.</li>
         <li>Paste it here.</li>
       </ol>
       <label class="field">Token
         <input id="token" type="password" required autocomplete="off" spellcheck="false" placeholder="github_pat_…">
       </label>
-      <p class="hint">The token is kept in this browser only and sent only to api.github.com.</p>
+      <p class="hint">The token stays in this browser and is sent only to api.github.com. Sign out from the Edit sheet to remove it.</p>
       <p class="err" id="signin-err" role="alert"></p>
     </div>
   </form>

@@ -1,4 +1,4 @@
-site/prices.json
 .claude/
 __pycache__/
 .DS_Store
+data/

@@ -1,7 +1,7 @@
 import { analyze, allocation, indexOnOrAfter, windowReturn } from './calc.js';
 
-const REPO = 'hjungwoo01/portAnalyst';
-const API = `https://api.github.com/repos/${REPO}/contents/site/holdings.json`;
+// Holdings and prices live in a private repository, so only a token with access can read or change them.
+const DATA = 'https://api.github.com/repos/hjungwoo01/portAnalyst-data/contents';
 const RANGES = { '1M': 1, '3M': 3, 'YTD': 0, '1Y': 12, 'All': null };
 
 const $ = (s) => document.querySelector(s);
@@ -15,7 +15,7 @@ const today = () => new Date().toLocaleDateString('sv'); // YYYY-MM-DD in local 
 // Korea, Japan and China mark gains in red, like Apple Stocks does in those regions.
 if (/^(ko|ja|zh)\b/.test(navigator.language)) document.documentElement.dataset.updown = 'east';
 
-let holdings, prices, sha, draft, a;
+let holdings, prices, sha, draft, a, loadError;
 const view = { range: store.get('range') || '1Y', by: store.get('by') || 'sector' };
 
 // ---------- formatting ----------
@@ -29,27 +29,36 @@ const day = (iso, long) => new Date(iso + 'T12:00:00').toLocaleDateString(undefi
 const token = () => store.get('gh-token');
 const b64 = (s) => btoa(Array.from(new TextEncoder().encode(s), (b) => String.fromCharCode(b)).join(''));
 const unb64 = (s) => new TextDecoder().decode(Uint8Array.from(atob(s.replace(/\n/g, '')), (c) => c.charCodeAt(0)));
-const gh = (method, body, tok = token()) => fetch(API, {
+const gh = (file, { method = 'GET', body, raw, tok = token() } = {}) => fetch(`${DATA}/${file}`, {
   method, cache: 'no-store',
-  headers: { Authorization: `Bearer ${tok}`, Accept: 'application/vnd.github+json' },
+  headers: { Authorization: `Bearer ${tok}`, Accept: `application/vnd.github${raw ? '.raw' : ''}+json` },
   body: body && JSON.stringify(body),
 });
 
-// The owner reads the repo directly so saved edits show before the site redeploys.
-async function loadHoldings() {
-  if (token()) {
-    try {
-      const r = await gh('GET');
-      if (r.ok) { const j = await r.json(); sha = j.sha; return JSON.parse(unb64(j.content)); }
-    } catch {}
+// Returns an error message for the sign-in screen, or nothing on success.
+async function load(tok = token()) {
+  try {
+    const [h, p] = await Promise.all([gh('holdings.json', { tok }), gh('prices.json', { raw: true, tok })]);
+    if (h.status === 401) return 'GitHub doesn’t recognize that token. It may have expired.';
+    if (h.status === 404) return 'That token can’t read portAnalyst-data. Give it access to that repository.';
+    if (!h.ok) return `GitHub returned an error (${h.status}). Try again in a moment.`;
+    const j = await h.json();
+    sha = j.sha;
+    holdings = JSON.parse(unb64(j.content));
+    holdings.cash ??= {};
+    prices = p.ok ? await p.json() : null;
+  } catch {
+    return 'Couldn’t reach GitHub. Check your connection and try again.';
   }
-  return (await fetch('holdings.json', { cache: 'no-cache' })).json();
 }
 
 // ---------- render ----------
 function render() {
-  const empty = !prices
-    ? '<h2>No price data yet</h2><p>Prices are fetched when the site deploys. If this persists, check the repository’s Actions tab.</p>'
+  $('#edit').hidden = !holdings; // the private screen has its own Sign In button
+  const empty = !holdings
+    ? `<h2>This portfolio is private</h2><p>Sign in with your GitHub token to view it.</p>${loadError ? `<p class="err">${esc(loadError)}</p>` : ''}<button class="prominent" type="button" data-open-editor>Sign In</button>`
+    : !prices
+    ? '<h2>No price data yet</h2><p>Prices come from the Prices workflow in portAnalyst-data. If this persists, check that repository’s Actions tab.</p>'
     : !holdings.transactions.length && !Object.keys(holdings.cash).length
     ? '<h2>No holdings yet</h2><p>Add your first trade to see your sectors, your cash and how you compare with your benchmark.</p><button class="prominent" type="button" data-open-editor>Add a Trade</button>'
     : '';
@@ -191,7 +200,7 @@ function renderNotes() {
   const missing = a.pending.filter((s) => prices.errors?.includes(s));
   const waiting = a.pending.filter((s) => !missing.includes(s));
   const notes = [];
-  if (waiting.length) notes.push(`Waiting for prices for ${waiting.join(', ')}. They appear after the next update, a couple of minutes after saving.`);
+  if (waiting.length) notes.push(`Waiting for prices for ${waiting.join(', ')}. They arrive about a minute after saving; reload to see them.`);
   if (missing.length) notes.push(`Yahoo Finance has no prices for ${missing.join(', ')}. Check the ticker; Korean stocks end in .KS or .KQ.`);
   if (holdings.base !== prices.base) notes.push(`Values switch to ${holdings.base} after the next update.`);
   if (!$('#status').dataset.sticky) $('#status').textContent = notes.join(' ');
@@ -272,20 +281,20 @@ $('#save').addEventListener('click', async () => {
   const btn = $('#save');
   btn.disabled = true; btn.textContent = 'Saving…'; err.textContent = '';
   try {
-    if (!sha) { const r = await gh('GET'); if (r.ok) sha = (await r.json()).sha; }
-    const r = await gh('PUT', { message: 'Update holdings', content: b64(JSON.stringify(draft, null, 2) + '\n'), sha });
+    const r = await gh('holdings.json', { method: 'PUT', body: { message: 'Update holdings', content: b64(JSON.stringify(draft, null, 2) + '\n'), sha } });
     if (r.ok) {
       sha = (await r.json()).content.sha;
       holdings = draft;
       $('#editor').close();
       $('#status').dataset.sticky = 1;
-      $('#status').textContent = 'Saved. The site refreshes prices for any new tickers in about two minutes.';
+      $('#status').textContent = 'Saved. Prices for any new tickers arrive in about a minute; reload to see them.';
       render();
     } else if (r.status === 409) {
       err.textContent = 'Your holdings changed on GitHub since this page loaded. Reload the page and make your edit again.';
-    } else if ([401, 403, 404].includes(r.status)) {
-      err.textContent = 'GitHub didn’t accept the token. Sign in again with a token that has Contents read and write access to this repository.';
-      store.set('gh-token', null);
+    } else if (r.status === 401) {
+      err.textContent = 'GitHub no longer accepts your token. Sign out, then sign in with a new one.';
+    } else if (r.status === 403 || r.status === 404) {
+      err.textContent = 'This token can view but not save. Give it Contents read and write access to portAnalyst-data.';
     } else {
       err.textContent = `GitHub returned an error (${r.status}). Try again in a moment.`;
     }
@@ -301,27 +310,21 @@ $('#signin-form').addEventListener('submit', async (e) => {
   const tok = $('#token').value.trim(), err = $('#signin-err');
   if (!tok) { err.textContent = 'Paste your token.'; return; }
   err.textContent = '';
-  try {
-    const r = await gh('GET', null, tok);
-    if (!r.ok) { err.textContent = r.status === 401 ? 'GitHub doesn’t recognize that token.' : `GitHub returned an error (${r.status}).`; return; }
-    const j = await r.json();
-    store.set('gh-token', tok);
-    sha = j.sha; holdings = JSON.parse(unb64(j.content));
-    $('#token').value = '';
-    $('#signin').close();
-    render();
-    openEditor();
-  } catch {
-    err.textContent = 'Couldn’t reach GitHub. Check your connection and try again.';
-  }
+  const msg = await load(tok);
+  if (msg) { err.textContent = msg; return; }
+  store.set('gh-token', tok);
+  loadError = null;
+  $('#token').value = '';
+  $('#signin').close();
+  render();
 });
 
 $('#signout').addEventListener('click', () => {
   store.set('gh-token', null);
-  $('#editor').close();
+  location.reload();
 });
 
-const edit = () => (token() ? openEditor() : $('#signin').showModal());
+const edit = () => (holdings && token() ? openEditor() : $('#signin').showModal());
 $('#edit').addEventListener('click', edit);
 $('#empty').addEventListener('click', (e) => e.target.closest('[data-open-editor]') && edit());
 
@@ -337,9 +340,5 @@ let resizeW = innerWidth;
 addEventListener('resize', () => { if (innerWidth !== resizeW && a) { resizeW = innerWidth; renderBench(); } });
 
 // ---------- start ----------
-[holdings, prices] = await Promise.all([
-  loadHoldings(),
-  fetch('prices.json', { cache: 'no-cache' }).then((r) => (r.ok ? r.json() : null)).catch(() => null),
-]);
-holdings.cash ??= {};
+if (token()) loadError = await load();
 render();
