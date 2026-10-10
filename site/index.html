@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://api.github.com; base-uri 'none'; object-src 'none'">
+<meta name="color-scheme" content="light dark">
+<title>Portfolio</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230071E3'/%3E%3Cpath d='M6 22l7-7 5 4 8-9' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<style>
+:root {
+  color-scheme: light dark;
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  --bg: #F2F2F7; --card: #FFFFFF; --label: #1D1D1F; --label2: #6E6E73; --sep: #D8D8DC;
+  --fill: rgba(118,118,128,.12); --thumb: #FFFFFF; --shadow: 0 1px 3px rgba(0,0,0,.12);
+  --accent: #0066CC; --accent-fill: #0071E3; --danger: #C9001A;
+  --up: #1F7A35; --down: #C9001A; --cash: #8E8E93;
+  --c1: #007AFF; --c2: #FF9500; --c3: #AF52DE; --c4: #30B0C7; --c5: #FF2D55;
+  --c6: #FFCC00; --c7: #5856D6; --c8: #A2845E; --c9: #32ADE6; --c10: #00C7BE;
+}
+/* Korea, Japan and China mark gains in red; set from the reader's locale in app.js. */
+:root[data-updown=east] { --up: #C9001A; --down: #0040DD; }
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #000000; --card: #1C1C1E; --label: #F5F5F7; --label2: #98989D; --sep: #38383A;
+    --fill: rgba(118,118,128,.24); --thumb: #636366; --shadow: none;
+    --accent: #409CFF; --accent-fill: #0071E3; --danger: #FF6961;
+    --up: #30D158; --down: #FF6961; --cash: #8E8E93;
+    --c1: #0A84FF; --c2: #FF9F0A; --c3: #BF5AF2; --c4: #40C8E0; --c5: #FF375F;
+    --c6: #FFD60A; --c7: #5E5CE6; --c8: #AC8E68; --c9: #64D2FF; --c10: #63E6E2;
+  }
+  :root[data-updown=east] { --up: #FF6961; --down: #409CFF; }
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--bg); color: var(--label); font: 17px/1.35 var(--font); -webkit-font-smoothing: antialiased; }
+button, input, select { font: inherit; color: inherit; }
+a { color: var(--accent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+.num { font-variant-numeric: tabular-nums; }
+.muted { color: var(--label2); }
+.up { color: var(--up); } .down { color: var(--down); }
+.vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+.wrap { max-width: 1120px; margin: 0 auto; padding: 0 max(16px, env(safe-area-inset-left)) 48px; }
+header.top { display: flex; align-items: flex-end; justify-content: space-between; padding: 28px 0 16px; }
+h1 { font-size: 34px; line-height: 1.1; font-weight: 700; letter-spacing: .01em; margin: 0; }
+.text-btn { background: none; border: 0; color: var(--accent); padding: 10px 6px; min-height: 44px; cursor: pointer; }
+.prominent { background: var(--accent-fill); color: #fff; border: 0; border-radius: 999px; padding: 10px 20px; min-height: 44px; font-weight: 600; cursor: pointer; }
+.prominent:disabled { opacity: .5; cursor: default; }
+.danger { color: var(--danger); }
+
+main { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); grid-template-areas: "summary" "bench" "alloc" "holdings"; }
+@media (min-width: 900px) {
+  main { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); grid-template-areas: "summary summary" "bench alloc" "holdings alloc"; align-items: start; }
+  #alloc { position: sticky; top: 16px; }
+}
+.card { background: var(--card); border-radius: 22px; padding: 20px; }
+.card h2 { font-size: 20px; font-weight: 600; margin: 0; }
+.card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+.foot { font-size: 13px; color: var(--label2); margin: 14px 0 0; }
+
+#summary { grid-area: summary; display: grid; margin: 0; }
+.stat dt { font-size: 15px; color: var(--label2); }
+.stat dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
+.stat dd small { font-size: 15px; font-weight: 500; margin-left: 6px; }
+.stat.total dd { font-size: 34px; font-weight: 700; overflow-wrap: anywhere; }
+/* Phones: total on top, the rest as label-value rows. */
+.stat:not(.total) { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 11px 0; border-top: .5px solid var(--sep); }
+.stat:not(.total) dd { text-align: right; }
+.stat.total { padding-bottom: 12px; }
+@media (min-width: 700px) {
+  #summary { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+  .stat:not(.total) { display: block; padding: 0; border: 0; }
+  .stat:not(.total) dd { text-align: left; font-size: 22px; margin-top: 2px; }
+  .stat dd small { display: block; margin: 0; }
+  .stat.total dd { font-size: 28px; margin-top: 2px; }
+  .stat.total { padding: 0; }
+}
+
+#bench { grid-area: bench; }
+#verdict { font: 700 28px/1.15 ui-rounded, "SF Pro Rounded", var(--font); margin: 0 0 6px; }
+#bench-sub { font-size: 15px; color: var(--label2); margin: 0; min-height: 1.35em; }
+#bench-sub svg { vertical-align: middle; margin-right: 4px; }
+#chart { margin: 14px 0 0; touch-action: pan-y; }
+#chart svg { display: block; width: 100%; overflow: visible; cursor: crosshair; }
+#chart svg:focus-visible { outline-offset: 6px; }
+.axis { font-size: 12px; fill: var(--label2); font-variant-numeric: tabular-nums; }
+.grid { stroke: var(--sep); stroke-width: 1; }
+.grid.zero { stroke: var(--label2); stroke-opacity: .5; }
+.you { fill: none; stroke: var(--accent); stroke-width: 2.25; stroke-linejoin: round; stroke-linecap: round; }
+.bm { fill: none; stroke: var(--label2); stroke-width: 1.5; stroke-dasharray: 4 3; }
+.scrub { stroke: var(--label2); stroke-width: 1; }
+
+.seg { display: inline-flex; background: var(--fill); border-radius: 9px; padding: 2px; border: 0; margin: 0; }
+.seg input { position: absolute; opacity: 0; pointer-events: none; }
+.seg label { font-size: 13px; font-weight: 500; padding: 6px 12px; min-width: 44px; text-align: center; border-radius: 7px; cursor: pointer; }
+.seg input:checked + label { background: var(--thumb); box-shadow: var(--shadow); font-weight: 600; }
+.seg input:focus-visible + label { outline: 2px solid var(--accent); }
+
+#alloc { grid-area: alloc; }
+.stack { display: flex; gap: 2px; height: 14px; border-radius: 7px; overflow: hidden; margin: 4px 0 8px; }
+.stack span { min-width: 3px; }
+.list { list-style: none; margin: 0; padding: 0; }
+.list > li { border-top: .5px solid var(--sep); }
+.list > li:first-child { border-top: 0; }
+.legend li { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto auto; gap: 10px; align-items: center; padding: 10px 0; font-size: 15px; }
+.legend i { width: 10px; height: 10px; border-radius: 50%; }
+.legend .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.legend .pct { font-weight: 600; text-align: right; }
+.legend .val { color: var(--label2); text-align: right; min-width: 6.5em; }
+
+#holdings { grid-area: holdings; }
+.hold li { padding: 12px 0; }
+.row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.row > :first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row > :last-child { flex-shrink: 0; text-align: right; }
+.row + .row { font-size: 15px; color: var(--label2); margin-top: 2px; flex-wrap: wrap; row-gap: 0; }
+.row + .row > :first-child { white-space: normal; }
+.row + .row > :last-child { margin-left: auto; }
+.tk { font-weight: 600; }
+.group-label { font-size: 15px; font-weight: 600; color: var(--label2); margin: 18px 0 2px; }
+
+#status { margin: 0 0 16px; padding: 12px 16px; border-radius: 14px; background: var(--card); font-size: 15px; }
+#status:empty { display: none; }
+.empty { text-align: center; padding: 48px 20px; }
+.empty p { color: var(--label2); }
+
+dialog { border: 0; padding: 0; border-radius: 22px; background: var(--card); color: var(--label); width: min(600px, calc(100vw - 32px)); max-height: min(90vh, 920px); overflow: auto; overscroll-behavior: contain; }
+dialog::backdrop { background: rgba(0,0,0,.4); }
+@media (max-width: 640px) {
+  dialog.sheet { width: 100vw; max-width: 100vw; max-height: 94vh; margin: auto 0 0; border-radius: 22px 22px 0 0; padding-bottom: env(safe-area-inset-bottom); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  dialog[open] { animation: rise .25s cubic-bezier(.2,.8,.2,1); }
+  @keyframes rise { from { transform: translateY(24px); opacity: 0; } }
+}
+.sheet-bar { position: sticky; top: 0; z-index: 1; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; padding: 8px 12px; background: var(--card); border-bottom: .5px solid var(--sep); }
+.sheet-bar h2 { font-size: 17px; font-weight: 600; margin: 0; }
+.sheet-bar > :first-child { justify-self: start; }
+.sheet-bar > :last-child { justify-self: end; }
+.sheet-body { padding: 4px 20px 24px; }
+.sheet-body h3 { font-size: 20px; font-weight: 600; margin: 24px 0 10px; }
+.fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.fields .full { grid-column: 1 / -1; }
+.field { display: grid; gap: 4px; font-size: 13px; color: var(--label2); }
+.field input, .field select { color: var(--label); }
+input:not([type=radio]), select { width: 100%; font-size: 17px; background: var(--fill); border: 0; border-radius: 10px; padding: 10px 12px; min-height: 44px; }
+input:user-invalid { box-shadow: inset 0 0 0 1.5px var(--danger); }
+.hint { font-size: 13px; color: var(--label2); margin: 6px 0 0; }
+.err { color: var(--danger); font-size: 15px; margin: 8px 0 0; }
+.err:empty { display: none; }
+.trades li, .cash-rows li { display: flex; align-items: center; gap: 12px; padding: 6px 0; }
+.trades li > span, .cash-rows li > label { flex: 1; min-width: 0; font-size: 15px; }
+.cash-rows li > label { display: flex; align-items: center; gap: 12px; }
+.cash-rows li > label > span { width: 3.2em; font-weight: 600; }
+.icon-btn { background: none; border: 0; color: var(--danger); width: 44px; height: 44px; border-radius: 22px; cursor: pointer; font-size: 15px; flex-shrink: 0; }
+.icon-btn:hover { background: var(--fill); }
+.inline { display: flex; gap: 12px; align-items: end; }
+.inline > .field { flex: 1; }
+.actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+#signin .sheet-body ol { padding-left: 1.2em; }
+#signin .sheet-body li { margin: 6px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1>Portfolio</h1>
+    <button id="edit" class="text-btn" type="button">Edit</button>
+  </header>
+  <p id="status" role="status"></p>
+  <div id="empty" class="card empty" hidden></div>
+  <main id="main">
+    <dl id="summary" class="card"></dl>
+
+    <section id="bench" class="card" aria-labelledby="verdict">
+      <h2 id="verdict">Loading…</h2>
+      <p id="bench-sub" aria-live="polite"></p>
+      <div id="chart"></div>
+      <div class="card-head" style="margin: 14px 0 0">
+        <fieldset class="seg" id="range">
+          <legend class="vh">Period</legend>
+        </fieldset>
+      </div>
+      <p class="foot" id="bench-foot"></p>
+    </section>
+
+    <section id="alloc" class="card" aria-labelledby="alloc-title">
+      <div class="card-head">
+        <h2 id="alloc-title">Allocation</h2>
+        <fieldset class="seg" id="by">
+          <legend class="vh">Group by</legend>
+        </fieldset>
+      </div>
+      <div id="alloc-body"></div>
+    </section>
+
+    <section id="holdings" class="card" aria-labelledby="hold-title">
+      <div class="card-head"><h2 id="hold-title">Holdings</h2></div>
+      <div id="hold-body"></div>
+    </section>
+  </main>
+  <p class="foot" id="updated"></p>
+</div>
+
+<dialog id="editor" class="sheet" aria-labelledby="ed-title">
+  <div class="sheet-bar">
+    <button type="button" class="text-btn" data-close>Cancel</button>
+    <h2 id="ed-title">Edit Holdings</h2>
+    <button type="button" class="prominent" id="save">Save</button>
+  </div>
+  <div class="sheet-body">
+    <p class="err" id="save-err" role="alert"></p>
+
+    <h3>Add a Trade</h3>
+    <form id="trade-form" class="fields" novalidate>
+      <label class="field">Ticker
+        <input name="ticker" required pattern="[A-Za-z0-9.\-\^=]{1,20}" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="AAPL, 005930.KS">
+      </label>
+      <div class="field"><span id="side-label">Side</span>
+        <fieldset class="seg" aria-labelledby="side-label" style="display:flex">
+          <input type="radio" name="side" id="side-buy" value="1" checked><label for="side-buy" style="flex:1">Buy</label>
+          <input type="radio" name="side" id="side-sell" value="-1"><label for="side-sell" style="flex:1">Sell</label>
+        </fieldset>
+      </div>
+      <label class="field">Shares
+        <input name="shares" type="number" inputmode="decimal" required min="0" step="any" placeholder="10">
+      </label>
+      <label class="field">Price per share
+        <input name="price" type="number" inputmode="decimal" required min="0" step="any" placeholder="182.50" aria-describedby="price-hint">
+      </label>
+      <label class="field full">Date
+        <input name="date" type="date" required>
+      </label>
+      <p class="hint full" id="price-hint" style="margin:0">Enter the price in the stock’s own currency, like won for 005930.KS. Use the price you paid before any later stock split; splits are applied for you.</p>
+      <div class="full">
+        <button class="prominent" type="submit">Add Trade</button>
+        <p class="err" id="trade-err" role="alert"></p>
+      </div>
+    </form>
+
+    <h3>Trades</h3>
+    <ul class="list trades" id="trades"></ul>
+
+    <h3>Cash</h3>
+    <ul class="list cash-rows" id="cash-rows"></ul>
+    <form id="cash-form" class="inline" novalidate>
+      <label class="field">Currency
+        <input name="cur" required pattern="[A-Za-z]{3}" maxlength="3" autocapitalize="characters" autocomplete="off" placeholder="USD">
+      </label>
+      <button class="text-btn" type="submit">Add Currency</button>
+    </form>
+
+    <h3>Benchmark</h3>
+    <div class="fields">
+      <label class="field">Benchmark ticker
+        <input id="set-bench" required pattern="[A-Za-z0-9.\-\^=]{1,20}" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="SPY, ^KS11">
+      </label>
+      <label class="field">Show values in
+        <input id="set-base" required pattern="[A-Za-z]{3}" maxlength="3" autocapitalize="characters" autocomplete="off" placeholder="USD">
+      </label>
+    </div>
+    <p class="hint">New tickers, currencies and benchmarks get prices on the next update, about two minutes after you save.</p>
+
+    <div class="actions"><button type="button" class="text-btn danger" id="signout">Sign Out on This Device</button></div>
+  </div>
+</dialog>
+
+<dialog id="signin" aria-labelledby="si-title">
+  <form id="signin-form" novalidate>
+    <div class="sheet-bar">
+      <button type="button" class="text-btn" data-close>Cancel</button>
+      <h2 id="si-title">Sign In to Edit</h2>
+      <button type="submit" class="prominent">Sign In</button>
+    </div>
+    <div class="sheet-body">
+      <p>Holdings are saved to your GitHub repository, so only someone who can write to it can change them.</p>
+      <ol>
+        <li><a id="token-link" href="https://github.com/settings/personal-access-tokens/new?name=portAnalyst&amp;description=Edit%20portfolio%20holdings&amp;target_name=hjungwoo01&amp;contents=write" target="_blank" rel="noopener">Create a fine-grained token</a> with access to only this repository.</li>
+        <li>Under Repository permissions, set Contents to Read and write.</li>
+        <li>Paste it here.</li>
+      </ol>
+      <label class="field">Token
+        <input id="token" type="password" required autocomplete="off" spellcheck="false" placeholder="github_pat_…">
+      </label>
+      <p class="hint">The token is kept in this browser only and sent only to api.github.com.</p>
+      <p class="err" id="signin-err" role="alert"></p>
+    </div>
+  </form>
+</dialog>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
